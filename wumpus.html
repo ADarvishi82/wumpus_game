@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>بازی Wumpus با حرکت ضربدری</title>
+    <style>
+        body {
+            font-family: 'Tahoma', sans-serif;
+            background: linear-gradient(135deg, #1e3c72, #2a5298);
+            color: white;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: 1fr 300px;
+            gap: 20px;
+        }
+
+        .game-area {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .info-panel {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 15px;
+            padding: 20px;
+            backdrop-filter: blur(10px);
+            height: fit-content;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 2px;
+            background: #333;
+            border-radius: 10px;
+            padding: 10px;
+            margin: 20px 0;
+        }
+
+        .cell {
+            aspect-ratio: 1;
+            background: linear-gradient(145deg, #4a4a4a, #2d2d2d);
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            position: relative;
+            transition: all 0.3s ease;
+            font-size: 10px;
+            color: white;
+            border: 2px solid transparent;
+            min-height: 60px;
+        }
+
+        .cell:hover {
+            transform: scale(1.05);
+            box-shadow: 0 0 15px rgba(255, 255, 255, 0.3);
+        }
+
+        .cell.visited {
+            background: linear-gradient(145deg, #2d5a2d, #1a3d1a);
+            border-color: #4a7c59;
+        }
+
+        .cell.agent {
+            background: linear-gradient(145deg, #2d5a87, #1a3d5a);
+            border-color: #4a7cff;
+            box-shadow: 0 0 20px rgba(74, 124, 255, 0.5);
+        }
+
+        .cell.breeze {
+            background: linear-gradient(145deg, #5a5a2d, #3d3d1a);
+            border-color: #7c7c4a;
+        }
+
+        .cell.stench {
+            background: linear-gradient(145deg, #5a2d2d, #3d1a1a);
+            border-color: #7c4a4a;
+        }
+
+        .cell.gold {
+            background: linear-gradient(145deg, #ffd700, #cc8400);
+            border-color: #ffed4a;
+            box-shadow: 0 0 20px rgba(255, 215, 0, 0.5);
+        }
+
+        .cell-content {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .controls {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin: 20px 0;
+        }
+
+        .btn {
+            background: linear-gradient(145deg, #4a90e2, #357abd);
+            border: none;
+            border-radius: 8px;
+            color: white;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 14px;
+            font-weight: bold;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .reasoning {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #4a90e2;
+        }
+
+        .knowledge-base {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            max-height: 200px;
+            overflow-y: auto;
+        }
+
+        .status {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+        }
+
+        .keyboard-controls {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+
+        .keyboard-controls kbd {
+            background: linear-gradient(145deg, #555, #333);
+            border: 1px solid #777;
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-family: monospace;
+            font-weight: bold;
+            color: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .emoji {
+            font-size: 16px;
+        }
+
+        h3 {
+            margin-top: 0;
+            color: #4a90e2;
+        }
+
+        .game-over {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .game-over-content {
+            background: linear-gradient(145deg, #2c3e50, #34495e);
+            border-radius: 15px;
+            padding: 30px;
+            text-align: center;
+            max-width: 400px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="game-area">
+            <h2>🏹 بازی Wumpus با حرکت ضربدری</h2>
+            
+            <div class="grid" id="grid"></div>
+            
+            <div class="keyboard-controls">
+                <h3>⌨️ کنترل‌ها:</h3>
+                <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; text-align: center; font-size: 14px;">
+                    <div><kbd>W</kbd><br>بالا</div>
+                    <div><kbd>E</kbd><br>بالا-راست</div>
+                    <div><kbd>Q</kbd><br>بالا-چپ</div>
+                    <div><kbd>A</kbd><br>چپ</div>
+                    <div><kbd>S</kbd><br>پایین</div>
+                    <div><kbd>D</kbd><br>راست</div>
+                    <div><kbd>Z</kbd><br>پایین-چپ</div>
+                    <div><kbd>X</kbd><br>پایین-راست</div>
+                    <div><kbd>Space</kbd><br>🏹 تیر</div>
+                    <div><kbd>G</kbd><br>💰 طلا</div>
+                    <div><kbd>R</kbd><br>🎲 بازی جدید</div>
+                </div>
+            </div>
+
+            <div class="reasoning" id="reasoning">
+                <h3>🧠 استدلال حرکت بعدی:</h3>
+                <p>بازی شروع شد. بررسی محیط اطراف...</p>
+            </div>
+        </div>
+
+        <div class="info-panel">
+            <div class="status">
+                <h3>📊 وضعیت بازی</h3>
+                <p>موقعیت: <span id="position">(1,1)</span></p>
+                <p>تیرها: <span id="arrows">3</span></p> <!-- Updated arrows -->
+                <p>طلا: <span id="gold">0/3</span></p> <!-- Updated gold status -->
+                <p>امتیاز: <span id="score">0</span></p>
+            </div>
+
+            <div class="knowledge-base">
+                <h3>📚 پایگاه دانش (FOL)</h3>
+                <div id="knowledge">
+                    <p>Safe(1,1) ← شروع بازی</p>
+                    <p>Agent(1,1) ← موقعیت فعلی</p>
+                </div>
+            </div>
+
+            <div class="status">
+                <h3>🔍 علائم محسوس</h3>
+                <div id="percepts">
+                    <p>هیچ علامتی احساس نمی‌شود</p>
+                </div>
+            </div>
+
+            <div class="status">
+                <h3>📖 راهنما</h3>
+                <p>🌪️ نسیم: گودال نزدیک است</p>
+                <p>💨 بوی بد: Wumpus نزدیک است</p>
+                <p>✨ درخشش: طلا در اینجاست</p>
+                <p>🏹 Agent: موقعیت شما</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class WumpusGame {
+            constructor() {
+                this.size = 8;
+                this.agentPos = [0, 0]; // (row, col) 0-indexed
+                this.numWumpuses = 3; // Added number of wumpuses
+                this.numGold = 3; // Added number of gold pieces
+                this.arrows = this.numWumpuses; // Arrows equal to number of wumpuses
+                this.goldCollected = 0; // Track collected gold
+                this.gameOver = false;
+                this.score = 0;
+                this.visited = new Set();
+                this.knowledge = new Set();
+                this.initialSafe = new Set(); // Stores the starting cell
+                this.notWumpus = new Set();
+                this.notPit = new Set();
+                this.dangerous = new Set();
+                this.lastAgentPos = null; // برای جلوگیری از حلقه بازگشت فوری
+                
+                this.generateRandomWorld();
+                this.initializeKnowledge();
+                this.setupKeyboardControls();
+                this.render();
+                this.updateReasoning();
+            }
+
+            setupKeyboardControls() {
+                document.addEventListener('keydown', (event) => {
+                    if (this.gameOver) return;
+                    
+                    const key = event.key.toLowerCase();
+                    event.preventDefault();
+                    
+                    switch(key) {
+                        case 'w': this.move('up'); break;
+                        case 'a': this.move('left'); break;
+                        case 's': this.move('down'); break;
+                        case 'd': this.move('right'); break;
+                        case 'q': this.move('up-left'); break;
+                        case 'e': this.move('up-right'); break;
+                        case 'z': this.move('down-left'); break;
+                        case 'x': this.move('down-right'); break;
+                        case ' ': this.shoot(); break;
+                        case 'g': this.grab(); break;
+                        case 'r': startNewGame(); break;
+                    }
+                });
+            }
+
+            generateRandomWorld() {
+                // Clear previous positions
+                this.wumpusPos = []; // Changed to array
+                this.pits = [];
+                this.goldPos = []; // Changed to array
+                
+                // Generate all possible positions except (0,0) where agent starts
+                const availablePositions = [];
+                for (let row = 0; row < this.size; row++) {
+                    for (let col = 0; col < this.size; col++) {
+                        if (!(row === 0 && col === 0)) {
+                            availablePositions.push([row, col]);
+                        }
+                    }
+                }
+                
+                // Shuffle positions
+                this.shuffleArray(availablePositions);
+                
+                // Place Wumpuses randomly
+                for (let i = 0; i < this.numWumpuses && availablePositions.length > 0; i++) {
+                    this.wumpusPos.push(availablePositions.pop());
+                }
+                
+                // Place Gold randomly
+                for (let i = 0; i < this.numGold && availablePositions.length > 0; i++) {
+                     this.goldPos.push(availablePositions.pop());
+                }
+                
+                // Place 4-6 pits randomly
+                const numPits = Math.floor(Math.random() * 3) + 4; // 4-6 pits
+                for (let i = 0; i < numPits && availablePositions.length > 0; i++) {
+                    this.pits.push(availablePositions.pop());
+                }
+
+                // Ensure Wumpuses, Gold, and Pits are not in the starting cell (0,0)
+                // This is already handled by generating availablePositions excluding (0,0)
+                // Also ensure they don't overlap, which is handled by popping from shuffled array
+
+                console.log("🎲 نقشه جدید تولید شد:");
+                console.log(`🏹 Agent: (1,1)`);
+                console.log(`👹 Wumpuses: ${this.wumpusPos.map(([r,c]) => `(${r+1},${c+1})`).join(', ')}`); // Updated log
+                console.log(`💰 Gold: ${this.goldPos.map(([r,c]) => `(${r+1},${c+1})`).join(', ')}`); // Updated log
+                console.log(`🕳️ Pits: ${this.pits.map(([r,c]) => `(${r+1},${c+1})`).join(', ')}`);
+            }
+            
+            shuffleArray(array) {
+                for (let i = array.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [array[i], array[j]] = [array[j], array[i]];
+                }
+            }
+
+            initializeKnowledge() {
+                this.knowledge.add("Safe(1,1)");
+                this.knowledge.add("Agent(1,1)");
+                const startKey = `${this.agentPos[0]},${this.agentPos[1]}`;
+                this.initialSafe.add(startKey);
+                this.notWumpus.add(startKey); // Start cell has no Wumpus
+                this.notPit.add(startKey);    // Start cell has no Pit
+                this.visited.add(startKey);
+                this.knowledge.add(`¬Wumpus(1,1) ∧ ¬Pit(1,1) ← Start`);
+            }
+
+            getPercepts() {
+                const [row, col] = this.agentPos;
+                const percepts = [];
+                
+                // Check for breeze (adjacent to pit)
+                if (this.isAdjacentToPit(row, col)) {
+                    percepts.push("Breeze");
+                }
+                
+                // Check for stench (adjacent to any wumpus)
+                if (this.isAdjacentToWumpus(row, col)) { // Updated check
+                    percepts.push("Stench");
+                }
+                
+                // Check for glitter (gold in same cell)
+                if (this.isGold(row, col)) { // Updated check
+                    percepts.push("Glitter");
+                }
+                
+                return percepts;
+            }
+
+            isAdjacentToPit(row, col) {
+                return this.pits.some(([pr, pc]) => 
+                    Math.abs(pr - row) + Math.abs(pc - col) === 1
+                );
+            }
+
+            isAdjacentToWumpus(row, col) {
+                 // Check if adjacent to *any* wumpus
+                return this.wumpusPos.some(([wr, wc]) => 
+                    Math.abs(wr - row) + Math.abs(wc - col) === 1
+                );
+            }
+
+            updateKnowledge() {
+                const [row, col] = this.agentPos;
+                const percepts = this.getPercepts();
+                const currentPosKey = `${row},${col}`;
+                const currentPosDisplay = `${row + 1},${col + 1}`;
+
+                // Agent is at currentPosDisplay, so it's visited and known not to be a Wumpus/Pit itself
+                this.knowledge.add(`Agent(${currentPosDisplay})`);
+                if (!this.notWumpus.has(currentPosKey)) this.notWumpus.add(currentPosKey);
+                if (!this.notPit.has(currentPosKey)) this.notPit.add(currentPosKey);
+
+                const orthogonalAdjacentCells = this.getAdjacentCells(row, col, false); // Percepts are orthogonal
+
+                if (percepts.includes("Breeze")) {
+                    this.knowledge.add(`Breeze(${currentPosDisplay})`);
+                    this.knowledge.add(`∃x,y: OrthoAdjacent(${currentPosDisplay}, x,y) ∧ Pit(x,y)`);
+
+                    const pitCandidates = orthogonalAdjacentCells.filter(([ar, ac]) => {
+                        const key = `${ar},${ac}`;
+                        return !this.visited.has(key) && !this.isProvablySafe(ar, ac) && !this.notPit.has(key) && !this.dangerous.has(key);
+                    });
+                    if (pitCandidates.length === 1) {
+                        const [pr, pc] = pitCandidates[0];
+                        const pitKey = `${pr},${pc}`;
+                        if (!this.dangerous.has(pitKey)) {
+                            this.dangerous.add(pitKey);
+                            this.knowledge.add(`Pit(${pr + 1},${pc + 1}) ← Breeze(${currentPosDisplay}) ∧ UniqueOrthoCandidate`);
+                            console.log(`Inferred Pit at (${pr + 1},${pc + 1})`);
+                        }
+                    }
+                } else {
+                    this.knowledge.add(`¬Breeze(${currentPosDisplay})`);
+                    this.knowledge.add(`∀x,y: OrthoAdjacent(${currentPosDisplay}, x,y) → ¬Pit(x,y)`);
+                    orthogonalAdjacentCells.forEach(([ar, ac]) => {
+                        const key = `${ar},${ac}`;
+                        if (!this.notPit.has(key)) this.notPit.add(key);
+                        this.knowledge.add(`¬Pit(${ar + 1},${ac + 1}) ← ¬Breeze(${currentPosDisplay})`);
+                    });
+                }
+
+                if (percepts.includes("Stench")) {
+                    this.knowledge.add(`Stench(${currentPosDisplay})`);
+                    this.knowledge.add(`∃x,y: OrthoAdjacent(${currentPosDisplay}, x,y) ∧ Wumpus(x,y)`);
+                    const wumpusCandidates = orthogonalAdjacentCells.filter(([ar, ac]) => {
+                        const key = `${ar},${ac}`;
+                        return !this.visited.has(key) && !this.isProvablySafe(ar, ac) && !this.notWumpus.has(key) && !this.dangerous.has(key);
+                    });
+                    if (wumpusCandidates.length === 1) {
+                        const [wr, wc] = wumpusCandidates[0];
+                        const wumpusKey = `${wr},${wc}`;
+                        if (!this.dangerous.has(wumpusKey)) {
+                            this.dangerous.add(wumpusKey);
+                            this.knowledge.add(`Wumpus(${wr + 1},${wc + 1}) ← Stench(${currentPosDisplay}) ∧ UniqueOrthoCandidate`);
+                            console.log(`Inferred Wumpus at (${wr + 1},${wc + 1})`);
+                        }
+                    }
+                } else {
+                    this.knowledge.add(`¬Stench(${currentPosDisplay})`);
+                    this.knowledge.add(`∀x,y: OrthoAdjacent(${currentPosDisplay}, x,y) → ¬Wumpus(x,y)`);
+                    orthogonalAdjacentCells.forEach(([ar, ac]) => {
+                        const key = `${ar},${ac}`;
+                        if (!this.notWumpus.has(key)) this.notWumpus.add(key);
+                        this.knowledge.add(`¬Wumpus(${ar + 1},${ac + 1}) ← ¬Stench(${currentPosDisplay})`);
+                    });
+                }
+                
+                if (percepts.includes("Glitter")) {
+                    this.knowledge.add(`Glitter(${pos})`);
+                    this.knowledge.add(`Gold(${pos})`);
+                }
+                
+                // Update knowledge about collected gold
+                if (this.goldCollected > 0) {
+                     this.knowledge.add(`HasGold(${this.goldCollected})`);
+                }
+                if (this.wumpusPos.length < this.numWumpuses) {
+                     this.knowledge.add(`WumpusesRemaining(${this.wumpusPos.length})`);
+                }
+            }
+
+            isProvablySafe(row, col) {
+                const key = `${row},${col}`;
+                return this.initialSafe.has(key) || (this.notWumpus.has(key) && this.notPit.has(key));
+            }
+
+            getAdjacentCells(row, col, includeDiagonal = true) { // Default true for movement logic
+                const adjacent = [];
+                const directions = [[-1,0], [1,0], [0,-1], [0,1]]; // Orthogonal
+                
+                if (includeDiagonal) {
+                    directions.push([-1,-1], [-1,1], [1,-1], [1,1]); // Diagonal
+                }
+                
+                directions.forEach(([dr, dc]) => {
+                    const newRow = row + dr;
+                    const newCol = col + dc;
+                    if (newRow >= 0 && newRow < this.size && newCol >= 0 && newCol < this.size) {
+                        adjacent.push([newRow, newCol]);
+                    }
+                });
+                
+                return adjacent;
+            }
+
+            chooseBestMove() {
+                const [row, col] = this.agentPos;
+                const possibleMoves = [
+                    { dir: 'up', pos: [row-1, col], name: 'بالا' },
+                    { dir: 'down', pos: [row+1, col], name: 'پایین' },
+                    { dir: 'left', pos: [row, col+1], name: 'چپ' },       // RTL: col increases
+                    { dir: 'right', pos: [row, col-1], name: 'راست' },     // RTL: col decreases
+                    { dir: 'up-left', pos: [row-1, col+1], name: 'بالا-چپ' }, // RTL
+                    { dir: 'up-right', pos: [row-1, col-1], name: 'بالا-راست' }, // RTL
+                    { dir: 'down-left', pos: [row+1, col+1], name: 'پایین-چپ' }, // RTL
+                    { dir: 'down-right', pos: [row+1, col-1], name: 'پایین-راست' }  // RTL
+                ];
+                
+                const validMoves = possibleMoves.filter(move => this.isValidPosition(move.pos[0], move.pos[1]));
+                
+                // 1. Prioritize grabbing gold if available
+                if (this.isGold(row, col) && this.goldCollected < this.numGold) {
+                     return {
+                         move: { dir: 'grab', pos: [row, col], name: 'گرفتن طلا' },
+                         reason: `طلا در خانه فعلی (${row+1},${col+1}) یافت شد. گرفتن طلا 💰`
+                     };
+                }
+
+                // 2. Prioritize Unvisited Provably Safe Moves (Moved up for exploration preference)
+                const provablySafeMoves = validMoves.filter(move => 
+                    this.isProvablySafe(move.pos[0], move.pos[1]) &&
+                    !this.dangerous.has(`${move.pos[0]},${move.pos[1]}`)
+                );
+
+                const unvisitedSafeMoves = provablySafeMoves.filter(move => 
+                    !this.visited.has(`${move.pos[0]},${move.pos[1]}`)
+                );
+                
+                if (unvisitedSafeMoves.length > 0) {
+                    const nextMove = unvisitedSafeMoves[0]; // Simplest: pick first
+                    return {
+                        move: nextMove,
+                        reason: `حرکت به خانه امن قطعی و بازدید نشده ${nextMove.name} (${nextMove.pos[0]+1},${nextMove.pos[1]+1}). استنتاج: ¬Wumpus ∧ ¬Pit.`
+                    };
+                }
+
+                // 3. Suggest Shooting a Confirmed Wumpus in Line of Sight
+                if (this.arrows > 0) {
+                    const [currentRow, currentCol] = this.agentPos;
+                    const orthogonalAdjacent = this.getAdjacentCells(currentRow, currentCol, false);
+
+                    for (const [adjR, adjC] of orthogonalAdjacent) {
+                        const adjKey = `${adjR},${adjC}`;
+                        const adjDisplay = `${adjR + 1},${adjC + 1}`;
+                        const isConfirmedWumpus = this.dangerous.has(adjKey) && Array.from(this.knowledge).some(k => k.startsWith(`Wumpus(${adjDisplay}`));
+
+                        if (isConfirmedWumpus && (adjR === currentRow || adjC === currentCol)) { // In line of sight
+                            return {
+                                move: { dir: 'shootAction', pos: [currentRow, currentCol], name: 'تیراندازی' },
+                                reason: `اقدام پیشنهادی: تیراندازی! Wumpus قطعی در (${adjDisplay}) در خط آتش است 🎯.`
+                            };
+                        }
+                    }
+                }
+
+                // 4. Consider Visited Provably Safe Moves (Backtracking, avoiding immediate return)
+                const allVisitedSafeMoves = provablySafeMoves.filter(move =>
+                    this.visited.has(`${move.pos[0]},${move.pos[1]}`)
+                );
+
+                let preferredVisitedSafeMoves = allVisitedSafeMoves;
+                if (this.lastAgentPos) {
+                    const lastPosKey = `${this.lastAgentPos[0]},${this.lastAgentPos[1]}`;
+                    const tempNonBacktrack = allVisitedSafeMoves.filter(move =>
+                        `${move.pos[0]},${move.pos[1]}` !== lastPosKey
+                    );
+                    if (tempNonBacktrack.length > 0) {
+                        preferredVisitedSafeMoves = tempNonBacktrack;
+                    }
+                }
+
+                if (preferredVisitedSafeMoves.length > 0) {
+                    const nextMove = preferredVisitedSafeMoves[0]; 
+                    return {
+                        move: nextMove,
+                        reason: `بازگشت به خانه امن قطعی و بازدید شده ${nextMove.name} (${nextMove.pos[0]+1},${nextMove.pos[1]+1}).`
+                    };
+                }
+                
+                // 5. Evaluate Risky/Unknown Moves
+                const unknownOrRiskyMoves = validMoves.filter(move => 
+                    !this.isProvablySafe(move.pos[0], move.pos[1]) &&
+                    !this.dangerous.has(`${move.pos[0]},${move.pos[1]}`)
+                );
+
+                if (unknownOrRiskyMoves.length > 0) {
+                    let bestRiskyMove = null;
+                    let minRiskScore = Infinity;
+                    let bestRiskReasons = [];
+
+                    unknownOrRiskyMoves.forEach(move => {
+                        const [nextR, nextC] = move.pos;
+                        const nextKey = `${nextR},${nextC}`;
+                        let currentRiskScore = 0;
+                        let cellRiskReason = [];
+
+                        // Check risk from Wumpus (orthogonally adjacent to a stench source)
+                        this.visited.forEach(visitedKey => {
+                            const [vr, vc] = visitedKey.split(',').map(Number);
+                            if (this.getPerceptsAt(vr, vc).includes("Stench")) {
+                                if (Math.abs(nextR - vr) + Math.abs(nextC - vc) === 1) { // Orthogonal adjacency
+                                    if (!this.notWumpus.has(nextKey)) {
+                                        currentRiskScore += 10; // High penalty for potential Wumpus
+                                        cellRiskReason.push(`ممکن است Wumpus باشد (نزدیک به بوی بد در ${vr+1},${vc+1})`);
+                                    }
+                                }
+                            }
+                            // Check risk from Pit (orthogonally adjacent to a breeze source)
+                            if (this.getPerceptsAt(vr, vc).includes("Breeze")) {
+                                if (Math.abs(nextR - vr) + Math.abs(nextC - vc) === 1) { // Orthogonal adjacency
+                                    if (!this.notPit.has(nextKey)) {
+                                        currentRiskScore += 5; // Medium penalty for potential Pit
+                                        cellRiskReason.push(`ممکن است گودال باشد (نزدیک به نسیم در ${vr+1},${vc+1})`);
+                                    }
+                                }
+                            }
+                        });
+                        if (this.visited.has(nextKey)) currentRiskScore += 1; // Slight penalty for re-visiting risky cell
+
+                        if (currentRiskScore < minRiskScore) {
+                            minRiskScore = currentRiskScore;
+                            bestRiskyMove = move;
+                            bestRiskReasons = cellRiskReason;
+                        } else if (currentRiskScore === minRiskScore && bestRiskyMove && !this.visited.has(nextKey) && this.visited.has(`${bestRiskyMove.pos[0]},${bestRiskyMove.pos[1]}`)) {
+                            bestRiskyMove = move; // Prefer unvisited if risk is same
+                            bestRiskReasons = cellRiskReason;
+                        }
+                    });
+
+                    if (bestRiskyMove) {
+                        let reason = `هیچ خانه امن قطعی یافت نشد. حرکت احتیاط‌آمیز به ${bestRiskyMove.name} (${bestRiskyMove.pos[0]+1},${bestRiskyMove.pos[1]+1}).`;
+                        if (bestRiskReasons.length > 0) reason += ` دلایل ریسک: ${bestRiskReasons.join('; ')}.`;
+                        else reason += ` این خانه کمترین ریسک استنباطی را دارد.`;
+                        return { move: bestRiskyMove, reason: reason };
+                    }
+                }
+                
+                // 6. Desperation: Move to a known dangerous cell if no other options
+                const dangerousButValidMoves = validMoves.filter(move => this.dangerous.has(`${move.pos[0]},${move.pos[1]}`));
+                if (dangerousButValidMoves.length > 0) {
+                    const nextMove = dangerousButValidMoves[0]; // Simplest: pick first
+                    return {
+                        move: nextMove,
+                        reason: `هشدار: هیچ حرکت امن یا کم‌خطری یافت نشد. مجبور به حرکت به خانه خطرناک ${nextMove.name} (${nextMove.pos[0]+1},${nextMove.pos[1]+1})!`
+                    };
+                }
+                
+                return {
+                    move: null,
+                    reason: "هیچ حرکت ممکنی یافت نشد. عامل گیر کرده است!"
+                };
+            }
+
+            updateReasoning() {
+                const percepts = this.getPercepts();
+                const bestMove = this.chooseBestMove();
+                
+                let reasoning = "";
+                
+                if (percepts.length > 0) {
+                    reasoning += `علائم محسوس: ${percepts.join(", ")}<br>`;
+                    reasoning += `استنتاج منطقی:<br>`;
+                    
+                    if (percepts.includes("Breeze")) {
+                        reasoning += `• Breeze(${this.agentPos[0]+1},${this.agentPos[1]+1}) → ∃x,y: OrthoAdjacent ∧ Pit(x,y)<br>`;
+                    } else {
+                         reasoning += `• ¬Breeze(${this.agentPos[0]+1},${this.agentPos[1]+1}) → ∀x,y: OrthoAdjacent → ¬Pit(x,y)<br>`;
+                    }
+                    if (percepts.includes("Stench")) {
+                        reasoning += `• Stench(${this.agentPos[0]+1},${this.agentPos[1]+1}) → ∃x,y: OrthoAdjacent ∧ Wumpus(x,y)<br>`;
+                    } else {
+                         reasoning += `• ¬Stench(${this.agentPos[0]+1},${this.agentPos[1]+1}) → ∀x,y: OrthoAdjacent → ¬Wumpus(x,y)<br>`;
+                    }
+                    if (percepts.includes("Glitter")) {
+                        reasoning += `• Glitter(${this.agentPos[0]+1},${this.agentPos[1]+1}) → Gold(${this.agentPos[0]+1},${this.agentPos[1]+1})<br>`;
+                    }
+                } else {
+                     reasoning += `علائم محسوس: هیچ<br>`;
+                     reasoning += `استنتاج منطقی:<br>`;
+                     reasoning += `• ¬Breeze(${this.agentPos[0]+1},${this.agentPos[1]+1}) → ∀x,y: OrthoAdjacent → ¬Pit(x,y)<br>`;
+                     reasoning += `• ¬Stench(${this.agentPos[0]+1},${this.agentPos[1]+1}) → ∀x,y: OrthoAdjacent → ¬Wumpus(x,y)<br>`;
+                }
+                
+                reasoning += `<br>تصمیم بعدی: ${bestMove.reason}`;
+                
+                document.getElementById('reasoning').innerHTML = `
+                    <h3>🧠 استدلال حرکت بعدی:</h3>
+                    <p>${reasoning}</p>
+                `;
+            }
+
+            move(direction) {
+                if (this.gameOver) return;
+                
+                this.lastAgentPos = [...this.agentPos]; // ذخیره موقعیت فعلی قبل از حرکت
+
+                const [row, col] = this.agentPos;
+                let newRow = row, newCol = col;
+                
+                switch(direction) {
+                    case 'up': newRow--; break;
+                    case 'down': newRow++; break;
+                    case 'left': newCol++; break; // برای حرکت به چپ در RTL، ستون افزایش می‌یابد
+                    case 'right': newCol--; break; // برای حرکت به راست در RTL، ستون کاهش می‌یابد
+                    case 'up-right': newRow--; newCol--; break; // بالا-راست: ردیف کم، ستون کم (بصری راست)
+                    case 'up-left': newRow--; newCol++; break;  // بالا-چپ: ردیف کم، ستون زیاد (بصری چپ)
+                    case 'down-right': newRow++; newCol--; break; // پایین-راست: ردیف زیاد، ستون کم (بصری راست)
+                    case 'down-left': newRow++; newCol++; break; // پایین-چپ: ردیف زیاد، ستون زیاد (بصری چپ)
+                    default: return; // Invalid direction
+                }
+                
+                if (!this.isValidPosition(newRow, newCol)) {
+                    // Optionally provide feedback for invalid move
+                    // console.log("Invalid move: Out of bounds");
+                    this.updateReasoning(); // Re-evaluate reasoning if move is invalid
+                    return;
+                }
+                
+                this.agentPos = [newRow, newCol];
+                this.visited.add(`${newRow},${newCol}`);
+                this.score -= 1; // Cost of movement
+                
+                // Check for hazards
+                if (this.isPit(newRow, newCol)) {
+                    this.score -= 1000;
+                    this.gameOver = true;
+                    this.showGameOver("شما در گودال افتادید! 💀");
+                    return;
+                }
+                
+                if (this.isWumpus(newRow, newCol)) { // Checks if agent is *on* a wumpus cell
+                    this.score -= 1000;
+                    this.gameOver = true;
+                    this.showGameOver("Wumpus شما را خورد! 👹");
+                    return;
+                }
+                
+                this.updateKnowledge();
+                this.render();
+                this.updateReasoning();
+
+                // Check for win condition after move and updates
+                this.checkWinCondition();
+            }
+
+            shoot() {
+                if (this.arrows <= 0 || this.gameOver) return;
+                
+                this.arrows--;
+                this.score -= 10;
+                
+                const [row, col] = this.agentPos;
+                let wumpusKilled = false;
+                
+                // Find the first wumpus in the agent's current row or column
+                const wumpusIndex = this.wumpusPos.findIndex(([wr, wc]) => wr === row || wc === col);
+
+                if (wumpusIndex !== -1) {
+                    this.score += 500;
+                    this.wumpusPos.splice(wumpusIndex, 1); // Remove one wumpus
+                    wumpusKilled = true;
+                    alert("Wumpus کشته شد! 🎯");
+                    // Update knowledge about remaining wumpuses
+                    if (this.wumpusPos.length === 0) {
+                         this.knowledge.add("¬∃x,y: Wumpus(x,y)");
+                    } else {
+                         this.knowledge.add(`WumpusesRemaining(${this.wumpusPos.length})`);
+                    }
+                } else {
+                     alert("تیر به هدف نخورد.");
+                }
+                
+                this.render();
+                this.updateReasoning();
+                this.checkWinCondition();
+            }
+
+            grab() {
+                if (this.gameOver) return;
+                
+                const [row, col] = this.agentPos;
+                // Find the index of a gold piece at the agent's current position
+                const goldIndex = this.goldPos.findIndex(([gr, gc]) => gr === row && gc === col);
+
+                if (goldIndex !== -1) {
+                    this.goldCollected++;
+                    this.score += 1000;
+                    this.goldPos.splice(goldIndex, 1); // Remove one gold piece
+                    alert("طلا پیدا شد! 💰");
+                    this.knowledge.add(`HasGold(${this.goldCollected})`);
+                    this.knowledge.add(`¬Gold(${row+1},${col+1})`); // Gold is no longer here
+                } else {
+                     // Optionally provide feedback if no gold is here
+                     // alert("طلایی برای برداشتن اینجا نیست.");
+                }
+                
+                this.render();
+                this.updateReasoning();
+                this.checkWinCondition();
+            }
+
+            isValidPosition(row, col) {
+                return row >= 0 && row < this.size && col >= 0 && col < this.size;
+            }
+
+            isPit(row, col) {
+                return this.pits.some(([pr, pc]) => pr === row && pc === col);
+            }
+
+            isWumpus(row, col) {
+                 // Check if agent is *on* any wumpus cell
+                return this.wumpusPos.some(([wr, wc]) => wr === row && wc === col);
+            }
+
+            isGold(row, col) {
+                 // Check if agent is *on* any gold cell
+                return this.goldPos.some(([gr, gc]) => gr === row && gc === col);
+            }
+
+            render() {
+                const grid = document.getElementById('grid');
+                grid.innerHTML = '';
+                
+                for (let row = 0; row < this.size; row++) {
+                    for (let col = 0; col < this.size; col++) {
+                        const cell = document.createElement('div');
+                        cell.className = 'cell';
+                        // cell.onclick = () => this.cellClick(row, col); // Keep for debugging if needed
+                        
+                        let content = '';
+                        let classes = ['cell'];
+                        
+                        if (this.visited.has(`${row},${col}`)) {
+                            classes.push('visited');
+                        }
+                        
+                        if (this.agentPos[0] === row && this.agentPos[1] === col) {
+                            classes.push('agent');
+                            content += '<span class="emoji">🏹</span><br>';
+                        }
+                        
+                        // Only show percepts if the cell has been visited
+                        if (this.visited.has(`${row},${col}`)) {
+                            const percepts = this.getPerceptsAt(row, col);
+                            if (percepts.includes("Breeze")) {
+                                classes.push('breeze');
+                                content += '<span class="emoji">🌪️</span>';
+                            }
+                            if (percepts.includes("Stench")) {
+                                classes.push('stench');
+                                content += '<span class="emoji">💨</span>';
+                            }
+                            // Glitter is only perceived *in* the cell, not adjacent
+                            if (percepts.includes("Glitter")) {
+                                classes.push('gold'); // Add gold class for visual cue
+                                content += '<span class="emoji">✨</span>';
+                            }
+                        }
+                        
+                        cell.className = classes.join(' ');
+                        cell.innerHTML = `<div class="cell-content">${content}<small>(${row+1},${col+1})</small></div>`;
+                        grid.appendChild(cell);
+                    }
+                }
+                
+                // Update status
+                document.getElementById('position').textContent = `(${this.agentPos[0]+1},${this.agentPos[1]+1})`;
+                document.getElementById('arrows').textContent = this.arrows;
+                document.getElementById('gold').textContent = `${this.goldCollected}/${this.numGold}`; // Updated gold status
+                document.getElementById('score').textContent = this.score;
+                
+                // Update knowledge base (show last 10 entries for brevity)
+                const knowledgeDiv = document.getElementById('knowledge');
+                knowledgeDiv.innerHTML = Array.from(this.knowledge).slice(-10).map(k => `<p>${k}</p>`).join('');
+                
+                // Update percepts for the *current* cell
+                const currentPercepts = this.getPercepts();
+                document.getElementById('percepts').innerHTML = currentPercepts.length > 0 ? 
+                    currentPercepts.map(p => `<p>${p}</p>`).join('') : 
+                    '<p>هیچ علامتی احساس نمی‌شود</p>';
+            }
+
+            // This method gets percepts *as if* the agent were at a given cell (row, col)
+            // Used for rendering visited cells
+            getPerceptsAt(row, col) {
+                const percepts = [];
+                
+                if (this.isAdjacentToPit(row, col)) {
+                    percepts.push("Breeze");
+                }
+                
+                if (this.isAdjacentToWumpus(row, col)) {
+                    percepts.push("Stench");
+                }
+                
+                if (this.isGold(row, col)) { // Check if gold is *at* this cell
+                    percepts.push("Glitter");
+                }
+                
+                return percepts;
+            }
+
+            cellClick(row, col) {
+                // For debugging - show cell info
+                console.log(`Cell (${row+1},${col+1}) clicked`);
+                console.log(`Visited: ${this.visited.has(`${row},${col}`)}`);
+                console.log(`Provably Safe: ${this.isProvablySafe(row,col)} (notWumpus: ${this.notWumpus.has(`${row},${col}`)}, notPit: ${this.notPit.has(`${row},${col}`)})`);
+                console.log(`Pit: ${this.isPit(row, col)}`);
+                console.log(`Wumpus: ${this.isWumpus(row, col)}`);
+                console.log(`Gold: ${this.isGold(row, col)}`);
+                console.log(`Percepts: ${this.getPerceptsAt(row, col).join(', ')}`);
+            }
+
+            checkWinCondition() {
+                // Win condition: Collect all gold and return to the start (1,1)
+                if (this.goldCollected === this.numGold && this.agentPos[0] === 0 && this.agentPos[1] === 0) {
+                    this.score += 1000; // Bonus for returning
+                    this.gameOver = true;
+                    this.showGameOver("شما برنده شدید! 🎉 تمام طلا را جمع کردید و به خانه بازگشتید.");
+                }
+                 // Optional: Lose condition if all wumpuses are killed but gold isn't collected?
+                 // Or just rely on falling in pit/eaten by wumpus. Sticking to original loss conditions.
+            }
+
+            showGameOver(message) {
+                const gameOverDiv = document.createElement('div');
+                gameOverDiv.className = 'game-over';
+                gameOverDiv.innerHTML = `
+                    <div class="game-over-content">
+                        <h2>${message}</h2>
+                        <p>امتیاز نهایی: ${this.score}</p>
+                        <div style="margin: 20px 0;">
+                            <h3>🗺️ نقشه بازی:</h3>
+                            <p>👹 Wumpuses باقی‌مانده: ${this.wumpusPos.length > 0 ? this.wumpusPos.map(([r,c]) => `(${r+1},${c+1})`).join(', ') : 'همه کشته شدند'}</p> <!-- Updated -->
+                            <p>💰 طلاهای باقی‌مانده: ${this.goldPos.length > 0 ? this.goldPos.map(([r,c]) => `(${r+1},${c+1})`).join(', ') : 'همه جمع شدند'}</p> <!-- Updated -->
+                            <p>🕳️ گودال‌ها: ${this.pits.map(([r,c]) => `(${r+1},${c+1})`).join(', ')}</p>
+                        </div>
+                        <p><kbd>R</kbd> برای بازی جدید فشار دهید</p>
+                    </div>
+                `;
+                document.body.appendChild(gameOverDiv);
+                
+                // Add keyboard listener for game over screen
+                const gameOverHandler = (event) => {
+                    if (event.key.toLowerCase() === 'r') {
+                        document.removeEventListener('keydown', gameOverHandler);
+                        startNewGame();
+                    }
+                };
+                document.addEventListener('keydown', gameOverHandler);
+            }
+        }
+
+        // Initialize game
+        let game = new WumpusGame();
+
+        // Control functions (kept for potential button controls, though keyboard is primary)
+        function move(direction) {
+            game.move(direction);
+        }
+
+        function shoot() {
+            game.shoot();
+        }
+
+        function grab() {
+            game.grab();
+        }
+        
+        function startNewGame() {
+            // Remove game over screen
+            const gameOverDiv = document.querySelector('.game-over');
+            if (gameOverDiv) {
+                gameOverDiv.remove();
+            }
+            // Create new game with random world
+            game = new WumpusGame();
+        }
+    </script>
+</body>
+</html>
